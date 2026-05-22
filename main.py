@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import random
@@ -43,7 +44,12 @@ def _normalize_member_list(raw) -> list[dict]:
 
 def _member_name(member: dict, fallback: str) -> str:
     return (
-        str(member.get("card") or member.get("nickname") or member.get("remark") or fallback)
+        str(
+            member.get("card")
+            or member.get("nickname")
+            or member.get("remark")
+            or fallback
+        )
         if isinstance(member, dict)
         else fallback
     )
@@ -51,38 +57,172 @@ def _member_name(member: dict, fallback: str) -> str:
 
 def _level_of(affection: int) -> str:
     tiers = [
-        (0, 100, "朋友"),
-        (101, 300, "熟人"),
-        (301, 600, "心动"),
-        (601, 999, "恋人"),
+        (0, 99, "朋友"),
+        (100, 299, "熟人"),
+        (300, 599, "心动"),
+        (600, 999, "恋人"),
         (1000, 10**18, "主人"),
     ]
     for low, high, label in tiers:
         if low <= affection <= high:
             return label
-    return "朋友"
+    return "喵"
 
 
-@register("astrbot_sign_lp", "绫濑凛", "签到、排行榜和今日老婆", "1.0.0")
-class AffectionPlugin(Star):
+LUCK_INFO = (
+    (0, "区", ("哦，你拿反了，这个不是凶，是区...")),
+    # (
+    #     0,
+    #     "最凶",
+    #     (
+    #         "要不今天咱们就在床上躲一会吧...害怕...",
+    #         "保佑。祝你平安。",
+    #         "哎呀，幸运值几乎触底了！整个世界都在与你作对，每一步都充满荆棘。",
+    #         "运势黑暗至极，做任何事都如履薄冰，需万分小心。",
+    #     ),
+    # ),
+    (
+        1,
+        "大凶",
+        (
+            "可能有人一直盯着你......",
+            "要不今天咱还是别出门了......",
+            "幸运值极低，被厄运之神紧紧盯住，每一个决定都可能引发连锁的不幸。",
+            "运势陷入泥潭，需要极大的毅力和勇气才能挣脱困境。",
+        ),
+    ),
+    (
+        10,
+        "凶",
+        (
+            "啊这...昨天是不是做了什么不好的事？",
+            "啊哈哈...或许需要多加小心呢。",
+            "幸运值有所提升，但仍处于低谷，随时可能陷入更深的困境。",
+            "运势如同过山车，时好时坏，但大部分时间都在低谷徘徊，保持警惕。",
+        ),
+    ),
+    (
+        20,
+        "末吉",
+        (
+            "呜呜，今天运气似乎不太好...",
+            "勉强能算是个吉签吧。",
+            "幸运值略有波动，但整体仍不理想，仿佛被无形的障碍阻挡。",
+            "迷雾中的航行，方向不明。",
+        ),
+    ),
+    (
+        30,
+        "末小吉",
+        (
+            "唔...今天运气有点差哦。",
+            "今天喝水的时候务必慢一点。",
+            "幸运值有所提升，但仍处于危险边缘。",
+            "暴风雨中的小船，随时可能被巨浪吞噬，需保持冷静和坚韧。",
+        ),
+    ),
+    (
+        40,
+        "小吉",
+        (
+            "还行吧，稍差一点点呢。",
+            "差不多是阴天的水平吧，不用特别担心哦。",
+            "幸运值开始有所好转，但仍需小心谨慎，因为稍有不慎就可能前功尽弃。",
+            "黎明前的黑暗，虽然曙光初现，但仍需耐心等待和坚持。",
+        ),
+    ),
+    (
+        50,
+        "半吉",
+        (
+            "看样子是普通的一天呢。一切如常......",
+            "加油哦！今天需要靠自己奋斗！",
+            "终于摆脱了厄运，运势开始稳步上升，继续努力才能保持势头。",
+            "运势如同春日里的小草，虽然刚刚探出头来，但已经充满了生机和希望。",
+        ),
+    ),
+    (
+        60,
+        "吉",
+        (
+            "欸嘿...今天运气还不错哦？喜欢的博主或许会更新！",
+            "欸嘿...今天运气还不错哦？要不去抽卡？",
+            "幸运值大幅上升，幸运之神眷顾，做什么都顺风顺水。",
+            "运势如同夏日里的阳光，明媚而炽热，让人感受到无尽的温暖和力量。",
+        ),
+    ),
+    (
+        70,
+        "大吉",
+        (
+            "好耶！运气非常不错呢！今天是非常愉快的一天 ⌯>ᴗo⌯ .ᐟ.ᐟ",
+            "好耶！大概是不经意间看见彩虹的程度吧？",
+            "金色光环笼罩，无论做什么都能得到最好的结果。",
+            "丰收的季节，硕果累累，让人感受到无尽的喜悦和满足。",
+        ),
+    ),
+    (
+        80,
+        "祥吉",
+        (
+            "哇哦！特别好运哦！无论是喜欢的事还是不喜欢的事都能全部解决！",
+            "哇哦！特别好运哦！今天可以见到心心念念的人哦！",
+            "幸运几乎无人能敌，宇宙力量加持，做什么都能取得惊人的成就。",
+            "璀璨的星空，每一颗星星都闪耀着耀眼的光芒，让人陶醉其中。",
+        ),
+    ),
+    (
+        90,
+        "佳吉",
+        (
+            "૮₍ˊᗜˋ₎ა 不用多说，今天怎么度过都会顺意的！",
+            "૮₍ˊᗜˋ₎ა  会发生什么好事呢？真是期待...",
+            "幸运值已经接近完美，神明庇佑，做什么都能得心应手。",
+            "梦幻般的仙境，每一个角落都充满了美好和奇迹。",
+        ),
+    ),
+    # (
+    #     100,
+    #     "最吉",
+    #     (
+    #         "100， 100诶！不用求人脉，好运自然来！",
+    #         "好...好强！好事都会降临在你身边哦！",
+    #         "哇哦！你的幸运值已经达到了宇宙的极限！仿佛被全世界的幸福和美好所包围！",
+    #         "恭喜你成为宇宙间最幸运的人！愿你的未来永远如同神话般绚烂多彩，好运与你同在！",
+    #     ),
+    # ),
+    (100, "大吉吉", ("大吉吉！")),
+    (0xFF, "No way to reach here", ("How u reach here",)),
+)
+
+
+@register("astrbot_mxbot", "绫濑凛", "签到、排行榜、今日老婆和今日人品", "1.1.0")
+class MxBotPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
         self.config = config or {}
-        self.data_dir = os.path.join(
-            get_astrbot_plugin_data_path(), "astrbot_sign_lp"
-        )
+        self.data_dir = os.path.join(get_astrbot_plugin_data_path(), "astrbot_mxbot")
         self.data_file = os.path.join(self.data_dir, "state.json")
         self.state = {
             "lp_date": _today_str(),
             "groups": {},
+            "jrrp": {"users": {}},
         }
 
     async def initialize(self):
         os.makedirs(self.data_dir, exist_ok=True)
-        loaded = _load_json(self.data_file, self.state)
+        loaded = _load_json(self.data_file, {})
+        if not loaded:
+            for legacy_path in self._legacy_state_paths():
+                loaded = _load_json(legacy_path, {})
+                if loaded:
+                    break
         if isinstance(loaded, dict):
             self.state.update(loaded)
+        self._ensure_state_shape()
         self._reset_lp_if_needed()
+        if loaded and not os.path.exists(self.data_file):
+            _save_json(self.data_file, self.state)
 
     async def terminate(self):
         _save_json(self.data_file, self.state)
@@ -95,6 +235,57 @@ class AffectionPlugin(Star):
         group["sign"].setdefault("users", {})
         group["lp"].setdefault("users", {})
         return group
+
+    def _legacy_state_paths(self) -> list[str]:
+        base = get_astrbot_plugin_data_path()
+        return [
+            os.path.join(base, "astrbot_sign_lp", "state.json"),
+            os.path.join(base, "astrbot_plugin_affection", "state.json"),
+        ]
+
+    def _ensure_state_shape(self) -> None:
+        self.state.setdefault("lp_date", _today_str())
+        self.state.setdefault("groups", {})
+        jrrp_state = self.state.setdefault("jrrp", {})
+        jrrp_state.setdefault("users", {})
+        for group in self.state["groups"].values():
+            if not isinstance(group, dict):
+                continue
+            group.setdefault("sign", {})
+            group.setdefault("lp", {})
+            group["sign"].setdefault("users", {})
+            group["lp"].setdefault("users", {})
+
+    def _jrrp_state(self) -> dict:
+        jrrp_state = self.state.setdefault("jrrp", {})
+        jrrp_state.setdefault("users", {})
+        return jrrp_state
+
+    def _generate_jrrp_value(self, user_id: str, today: str) -> int:
+        digest = hashlib.sha256(f"{user_id}:{today}".encode("utf-8")).digest()
+        seed = int.from_bytes(digest[:8], "big")
+        return random.Random(seed).randint(0, 100)
+
+    def _jrrp_level(self, luck: int) -> tuple[str, str]:
+        for low, label, tips in LUCK_INFO:
+            if luck >= low:
+                short_info = label
+                long_info = random.choice(tips)
+            else:
+                break
+        return short_info, long_info
+
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def jrrp_listener(self, event: AstrMessageEvent):
+        message = (event.message_str or "").strip().lower()
+        if message.startswith(("/", "!", "！")):
+            message = message.lstrip("/!！").strip()
+        if message != "jrrp":
+            return
+
+        async for result in self._jrrp(event):
+            yield result
+        event.stop_event()
 
     def _reset_lp_if_needed(self) -> None:
         today = _today_str()
@@ -117,14 +308,17 @@ class AffectionPlugin(Star):
             return []
 
     def _current_sign_record(self, group_state: dict, user_id: str) -> dict:
-        return group_state["sign"]["users"].setdefault(user_id, {
-            "total_days": 0,
-            "continuous_days": 0,
-            "affection": 0,
-            "last_sign": "",
-            "last_delta": 0,
-            "name": "",
-        })
+        return group_state["sign"]["users"].setdefault(
+            user_id,
+            {
+                "total_days": 0,
+                "continuous_days": 0,
+                "affection": 0,
+                "last_sign": "",
+                "last_delta": 0,
+                "name": "",
+            },
+        )
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def sign_listener(self, event: AstrMessageEvent):
@@ -238,6 +432,30 @@ class AffectionPlugin(Star):
 
         yield event.plain_result("\n".join(lines))
 
+    async def _jrrp(self, event: AstrMessageEvent):
+        user_id = str(event.get_sender_id())
+        today = _today_str()
+
+        jrrp_state = self._jrrp_state()
+        users = jrrp_state["users"]
+        record = users.setdefault(
+            user_id,
+            {
+                "date": "",
+                "luck": 0,
+            },
+        )
+
+        if record.get("date") != today:
+            record["date"] = today
+            record["luck"] = self._generate_jrrp_value(user_id, today)
+
+        luck = int(record.get("luck", 0))
+        short_info, long_info = self._jrrp_level(luck)
+
+        message = f"你的幸运值为{luck}，判定为“{short_info}”。{long_info}"
+        yield event.plain_result(message)
+
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def today_love_listener(self, event: AstrMessageEvent):
         message = (event.message_str or "").strip().lower()
@@ -268,7 +486,9 @@ class AffectionPlugin(Star):
         if existing:
             wife_id = str(existing.get("wife_id", ""))
             wife_name = str(existing.get("wife_name", f"用户({wife_id})"))
-            yield event.plain_result(f"你今天已经有老婆{wife_name}({wife_id})了！")
+            yield event.plain_result(
+                f"你今天已经有老婆{wife_name}({wife_id})了，要好好对待哦。"
+            )
             return
 
         members = await self._fetch_group_members(event)

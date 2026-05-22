@@ -1,8 +1,8 @@
-name: astrbot_sign_lp
-display_name: 签到老婆
-version: 1.0.0
+name: astrbot_mxbot
+display_name: 梦汐Bot
+version: 1.1.0
 author: 绫濑凛
-desc: 签到、好感度排行榜和今日老婆
-short_desc: 签到、排行榜和今日老婆
+desc: 签到、好感度排行榜、今日老婆和今日人品
+short_desc: 签到、老婆与今日人品
 support_platforms:
   - aiocqhttp
