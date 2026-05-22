@@ -63,13 +63,13 @@ def _level_of(affection: int) -> str:
     return "朋友"
 
 
-@register("astrbot_plugin_affection", "xx", "签到、排行榜和今日老婆", "1.0.0")
+@register("astrbot_sign_lp", "绫濑凛", "签到、排行榜和今日老婆", "1.0.0")
 class AffectionPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
         self.config = config or {}
         self.data_dir = os.path.join(
-            get_astrbot_plugin_data_path(), "astrbot_plugin_affection"
+            get_astrbot_plugin_data_path(), "astrbot_sign_lp"
         )
         self.data_file = os.path.join(self.data_dir, "state.json")
         self.state = {
@@ -216,8 +216,19 @@ class AffectionPlugin(Star):
 
         yield event.plain_result("\n".join(lines))
 
-    @filter.command("lp")
-    async def today_love(self, event: AstrMessageEvent):
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def today_love_listener(self, event: AstrMessageEvent):
+        message = (event.message_str or "").strip().lower()
+        if message.startswith(("/","!","！")):
+            message = message.lstrip("/!！").strip()
+        if message not in {"lp", "今日老婆", "jrlp"}:
+            return
+
+        async for result in self._today_love(event):
+            yield result
+        event.stop_event()
+
+    async def _today_love(self, event: AstrMessageEvent):
         if event.is_private_chat():
             yield event.plain_result("这个功能只在群里用哦。")
             return
