@@ -1,7 +1,7 @@
 name: astrbot_plugin_affection
 display_name: 签到老婆
 version: 1.0.0
-author: xx
+author: 小黑莓
 desc: 签到、好感度排行榜和今日老婆
 short_desc: 签到、排行榜和今日老婆
 support_platforms:
