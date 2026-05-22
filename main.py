@@ -126,10 +126,21 @@ class AffectionPlugin(Star):
             "name": "",
         })
 
-    @filter.command("签到")
-    async def sign(self, event: AstrMessageEvent):
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def sign_listener(self, event: AstrMessageEvent):
+        message = (event.message_str or "").strip().lower()
+        if message.startswith(("/", "!", "！")):
+            message = message.lstrip("/!！").strip()
+        if message not in {"签到", "qd"}:
+            return
+
+        async for result in self._sign(event):
+            yield result
+        event.stop_event()
+
+    async def _sign(self, event: AstrMessageEvent):
         if event.is_private_chat():
-            yield event.plain_result("这个功能只在群里用哦。")
+            yield event.plain_result("这个功能只能在群里用哦。")
             return
 
         group_id = str(event.get_group_id())
@@ -147,8 +158,8 @@ class AffectionPlugin(Star):
             level = _level_of(affection)
             text = (
                 f"你今天已经签到过啦。\n"
-                f"已总共签到{record.get('total_days', 0)}天，连续签到{record.get('continuous_days', 0)}天。\n"
-                f"你的好感度是{affection}（今日+{delta}），目前的等级是：【{level}】~"
+                f"已签到{record.get('total_days', 0)}天，连续签到{record.get('continuous_days', 0)}天。\n"
+                f"你的好感度是{affection}（今日+{delta}），目前的等级是：{level}~"
             )
             yield event.plain_result(text)
             return
@@ -174,15 +185,26 @@ class AffectionPlugin(Star):
 
         level = _level_of(affection)
         text = (
-            f"已总共签到{record['total_days']}天，连续签到{record['continuous_days']}天。\n"
+            f"已签到{record['total_days']}天，连续签到{record['continuous_days']}天。\n"
             f"你的好感度是{affection}（今日+{delta}），目前的等级是：{level}~"
         )
         yield event.plain_result(text)
 
-    @filter.command("签到排行榜")
-    async def sign_rank(self, event: AstrMessageEvent):
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def sign_rank_listener(self, event: AstrMessageEvent):
+        message = (event.message_str or "").strip().lower()
+        if message.startswith(("/", "!", "！")):
+            message = message.lstrip("/!！").strip()
+        if message not in {"签到排行榜", "排行榜", "qdphb", "phb"}:
+            return
+
+        async for result in self._sign_rank(event):
+            yield result
+        event.stop_event()
+
+    async def _sign_rank(self, event: AstrMessageEvent):
         if event.is_private_chat():
-            yield event.plain_result("这个功能只在群里用哦。")
+            yield event.plain_result("这个功能只能在群里用哦。")
             return
 
         group_id = str(event.get_group_id())
@@ -219,7 +241,7 @@ class AffectionPlugin(Star):
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def today_love_listener(self, event: AstrMessageEvent):
         message = (event.message_str or "").strip().lower()
-        if message.startswith(("/","!","！")):
+        if message.startswith(("/", "!", "！")):
             message = message.lstrip("/!！").strip()
         if message not in {"lp", "今日老婆", "jrlp"}:
             return
@@ -230,7 +252,7 @@ class AffectionPlugin(Star):
 
     async def _today_love(self, event: AstrMessageEvent):
         if event.is_private_chat():
-            yield event.plain_result("这个功能只在群里用哦。")
+            yield event.plain_result("这个功能只能在群里用哦。")
             return
 
         self._reset_lp_if_needed()
@@ -246,18 +268,13 @@ class AffectionPlugin(Star):
         if existing:
             wife_id = str(existing.get("wife_id", ""))
             wife_name = str(existing.get("wife_name", f"用户({wife_id})"))
-            if wife_id == self_id:
-                yield event.plain_result("你今天已经有老婆我了！")
-            else:
-                yield event.plain_result(
-                    f"你今天已经有老婆{wife_name}({wife_id})了！"
-                )
+            yield event.plain_result(f"你今天已经有老婆{wife_name}({wife_id})了！")
             return
 
         members = await self._fetch_group_members(event)
         candidates = members if members else []
         if not candidates:
-            yield event.plain_result("我拿不到群成员列表，没法抽老婆啦。")
+            yield event.plain_result("拿不到群成员列表，没法抽老婆啦。")
             return
 
         wife = random.choice(candidates)
@@ -278,7 +295,7 @@ class AffectionPlugin(Star):
             return
 
         chain = [
-            Plain(f"你的今日老婆是 {wife_name}({wife_id})\n"),
+            Plain(f"你的今日老婆是 {wife_name} ({wife_id})\n"),
             Image.fromURL(avatar_url),
         ]
         yield event.chain_result(chain)

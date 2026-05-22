@@ -12,6 +12,11 @@ Install:
 2. Restart AstrBot, or reload the plugin from the WebUI.
 3. Make sure the bot can read group member lists.
 
+Aliases:
+
+- `签到`: `qd`
+- `签到排行榜`: `排行榜`, `qdphb`, `phb`
+
 Notes:
 
 - Data is stored in `astrbot_sign_lp/state.json` under the AstrBot plugin data directory.
